@@ -421,6 +421,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [timetablePeriodConfigs, setTimetablePeriodConfigs] = useState<TimetablePeriodConfig[]>(() => {
+    const stored = getLocalItem<TimetablePeriodConfig[]>('cms_timetable_period_configs', []);
+    if (stored.length > 0) return stored;
     const map = getLocalItem<Record<string, TimetablePeriodSlot[]>>(STORAGE_KEYS.TIMETABLE_PERIODS, {});
     return Object.entries(map).map(([className, periods]) => ({
       id: `local-${className}`,
@@ -773,6 +775,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [studentHistoryEvents]);
 
   useEffect(() => {
+    setLocalItem('cms_documents', documents);
+  }, [documents]);
+
+  useEffect(() => {
+    setLocalItem('cms_fee_receipts', recentReceipts);
+  }, [recentReceipts]);
+
+  useEffect(() => {
+    setLocalItem('cms_timetable_period_configs', timetablePeriodConfigs);
+  }, [timetablePeriodConfigs]);
+
+  useEffect(() => {
+    localStorage.setItem('cms_system_maintenance_mode', String(maintenanceMode));
+  }, [maintenanceMode]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    localStorage.setItem('smartlearning_current_user', JSON.stringify(currentUser));
+  }, [currentUser]);
+
+  useEffect(() => {
     if (!isAuthenticated || !getAuthToken() || !accountSettingsHydrated) return;
 
     const timer = window.setTimeout(() => {
@@ -913,6 +936,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addStudent = async (studentData: Omit<Student, 'id'>) => {
+    if (LOCAL_ONLY || !getAuthToken()) {
+      const created: Student = {
+        ...studentData,
+        id: `STU-${Date.now()}`,
+      };
+      setStudents((prev) => [created, ...prev]);
+      addActivity({
+        description: `New student ${created.name} admitted in ${created.className || studentData.className}`,
+        timestamp: 'Just now',
+        type: 'attendance',
+      });
+      setNotifications((prev) => [
+        {
+          id: `n-${Date.now()}`,
+          title: `New student admitted: ${created.name}`,
+          timestamp: 'Just now',
+          type: 'admission',
+          read: false,
+        },
+        ...prev,
+      ]);
+      logAuditAction(`Admitted Student: ${created.name}`, 'Students Subsystem', 'Saved in this browser');
+      try {
+        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+      } catch {
+        // Ignore
+      }
+      showToast('Student Admitted', `${created.name} saved in this browser.`, 'success');
+      return;
+    }
+
     try {
       const created = await backendClient.createStudent(studentData);
       setStudents(prev => [created, ...prev.filter(s => s.id !== created.id)]);
@@ -963,6 +1017,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateStudent = async (id: string, updated: Partial<Student>) => {
+    if (LOCAL_ONLY || !getAuthToken()) {
+      setStudents((prev) => prev.map((student) => (student.id === id ? { ...student, ...updated } : student)));
+      logAuditAction(`Updated Student Record (${id})`, 'Students Subsystem', 'Saved in this browser');
+      showToast('Student Updated', 'Student profile saved in this browser.', 'info');
+      return;
+    }
+
     try {
       const saved = await backendClient.updateStudent(id, updated);
       setStudents(prev => prev.map(s => (s.id === id ? { ...s, ...saved } : s)));
@@ -976,6 +1037,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteStudent = async (id: string) => {
     const target = students.find(s => s.id === id);
+    if (LOCAL_ONLY || !getAuthToken()) {
+      setStudents((prev) => prev.filter((student) => student.id !== id));
+      logAuditAction(`Deleted Student (${id})`, 'Students Subsystem', `Removed ${target?.name || id} from this browser`, 'Warning');
+      showToast('Student Removed', 'Student deleted from this browser.', 'warning');
+      return;
+    }
+
     try {
       await backendClient.deleteStudent(id);
       setStudents(prev => prev.filter(s => s.id !== id));
@@ -1440,7 +1508,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     date: string,
     classId?: string,
   ) => {
-    if (!isAuthenticated || !getAuthToken()) return;
+    if (LOCAL_ONLY || !isAuthenticated || !getAuthToken()) {
+      setAttendanceRecords((prev) => {
+        const kept = prev.filter(
+          (row) =>
+            !(
+              records.some((record) => record.studentId === row.studentId) &&
+              row.attendanceDate === date &&
+              (classId ? row.classId === classId : true)
+            ),
+        );
+        const next = records.map((record) => ({
+          id: `att-${date}-${record.studentId}`,
+          studentId: record.studentId,
+          classId,
+          attendanceDate: date,
+          status: record.status,
+          remarks: record.remarks,
+        }));
+        return [...next, ...kept];
+      });
+      return;
+    }
 
     const existing = await backendClient.getAttendance();
     await Promise.all(
@@ -1467,8 +1556,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateMaintenanceMode = async (enabled: boolean) => {
-    if (!isAuthenticated || !getAuthToken()) {
-      throw new Error('Authentication is required to change maintenance mode.');
+    if (LOCAL_ONLY || !isAuthenticated || !getAuthToken()) {
+      setMaintenanceMode(enabled);
+      localStorage.setItem('cms_system_maintenance_mode', String(enabled));
+      return;
     }
     const payload = { maintenance_mode: enabled };
     const saved =

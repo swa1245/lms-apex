@@ -62,6 +62,10 @@ export const AuthPage: React.FC = () => {
           setErrorMessage('No staff account for that email. Use admin@apexschool.edu.');
           return;
         }
+        if (match.status === 'Suspended') {
+          setErrorMessage('This account is suspended. Ask an administrator to reactivate it.');
+          return;
+        }
         if (!verifyLocalPassword(email, password)) {
           setErrorMessage(`Wrong password. The demo password is ${LOCAL_DEMO_PASSWORD}.`);
           return;
