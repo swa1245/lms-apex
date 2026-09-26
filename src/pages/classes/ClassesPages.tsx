@@ -745,11 +745,15 @@ function resolvePeriodsForClass(
 }
 
 export const TimetablePage: React.FC = () => {
-  const { classes, timetable, updateTimetableCell, timetablePeriodConfigs, saveTimetablePeriods, showToast } = useApp();
-  const [selectedClass, setSelectedClass] = useState(() => classes[0]?.name || 'Class 1 A');
+  const { classes, addClass, timetable, updateTimetableCell, timetablePeriodConfigs, saveTimetablePeriods, showToast } = useApp();
+  const [selectedClass, setSelectedClass] = useState(() => classes[0]?.name || '');
   const [periods, setPeriods] = useState<TimetablePeriodSlot[]>(() =>
-    resolvePeriodsForClass(classes[0]?.name || 'Class 1 A', []),
+    resolvePeriodsForClass(classes[0]?.name || '', []),
   );
+  const [showAddClass, setShowAddClass] = useState(false);
+  const [newClassName, setNewClassName] = useState('');
+  const [newTeacher, setNewTeacher] = useState('');
+  const [newRoom, setNewRoom] = useState('');
   const [editingCell, setEditingCell] = useState<{ day: string; periodIndex: number; currentValue: string } | null>(null);
   const [cellSubjectInput, setCellSubjectInput] = useState('');
   const [saving, setSaving] = useState(false);
@@ -760,8 +764,42 @@ export const TimetablePage: React.FC = () => {
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   useEffect(() => {
+    if (classes.length === 0) {
+      setSelectedClass('');
+      return;
+    }
+    if (!classes.some((item) => item.name === selectedClass)) {
+      setSelectedClass(classes[0].name);
+    }
+  }, [classes, selectedClass]);
+
+  useEffect(() => {
     setPeriods(resolvePeriodsForClass(selectedClass, timetablePeriodConfigs));
   }, [selectedClass, timetablePeriodConfigs]);
+
+  const handleCreateClass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newClassName.trim();
+    if (!name) return;
+    if (classes.some((item) => item.name.toLowerCase() === name.toLowerCase())) {
+      showToast('Class exists', `${name} is already in the timetable list.`, 'warning');
+      return;
+    }
+    await addClass({
+      name,
+      grade: 'General',
+      sections: ['A'],
+      totalStudents: 0,
+      capacity: 40,
+      classTeacher: newTeacher.trim() || 'Assigned Faculty',
+      roomNo: newRoom.trim() || 'Room TBD',
+    });
+    setSelectedClass(name);
+    setShowAddClass(false);
+    setNewClassName('');
+    setNewTeacher('');
+    setNewRoom('');
+  };
 
   const getSubjectAt = (day: string, periodIndex: number) => {
     if (periods[periodIndex]?.kind === 'break') return 'BREAK';
@@ -860,7 +898,7 @@ export const TimetablePage: React.FC = () => {
       await saveTimetablePeriods(selectedClass, cleaned, classId);
       setPeriods(cleaned);
       setPeriodsOpen(false);
-      showToast('Periods updated', `${selectedClass} timetable times saved to backend.`, 'success');
+      showToast('Periods updated', `${selectedClass} timetable times saved in this browser.`, 'success');
     } catch {
       // toast handled in context
     } finally {
@@ -881,34 +919,38 @@ export const TimetablePage: React.FC = () => {
         description="Plan the week by period — customize times per class, then click any slot to assign a subject"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button leftIcon={<Plus className="h-4 w-4" />} variant="secondary" onClick={openPeriodsEditor}>
+            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setShowAddClass(true)}>
+              Add Class
+            </Button>
+            <Button leftIcon={<Settings2 className="h-4 w-4" />} variant="secondary" onClick={openPeriodsEditor} disabled={!selectedClass}>
               Customize periods
             </Button>
-            <div className="hidden items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-700 sm:inline-flex">
-              <CalendarDays className="h-3 w-3" />
-              6-day week
-            </div>
             {classes.length > 0 ? (
               <Select
                 value={selectedClass}
                 onChange={setSelectedClass}
                 size="sm"
-                className="w-44"
+                className="w-48"
                 options={classes.map((c) => ({ value: c.name, label: c.name }))}
               />
-            ) : (
-              <input
-                type="text"
-                value={selectedClass}
-                onChange={(e) => setSelectedClass(e.target.value)}
-                placeholder="e.g. Class 1 A"
-                className="w-44 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-              />
-            )}
+            ) : null}
           </div>
         }
       />
 
+      {classes.length === 0 ? (
+        <EmptyState
+          icon={<School className="w-7 h-7" />}
+          title="No classes yet"
+          description="Add a class first. It will appear in the timetable dropdown so you can set that class's weekly schedule."
+          action={
+            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setShowAddClass(true)}>
+              Add Class
+            </Button>
+          }
+        />
+      ) : (
+      <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
@@ -1071,6 +1113,61 @@ export const TimetablePage: React.FC = () => {
           </table>
         </div>
       </section>
+      </div>
+      )}
+
+      <Modal
+        open={showAddClass}
+        onClose={() => setShowAddClass(false)}
+        size="md"
+        title="Add class"
+        description="This class is saved in this browser and listed in the timetable dropdown"
+        icon={<School className="h-5 w-5" />}
+        footer={
+          <>
+            <Button type="button" variant="secondary" onClick={() => setShowAddClass(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" form="timetable-add-class-form">
+              Create class
+            </Button>
+          </>
+        }
+      >
+        <form id="timetable-add-class-form" onSubmit={handleCreateClass} className="space-y-3 text-xs">
+          <div>
+            <label className="cms-label">Class name</label>
+            <input
+              type="text"
+              placeholder="e.g. Class 10 A"
+              value={newClassName}
+              onChange={(e) => setNewClassName(e.target.value)}
+              required
+              className={field}
+            />
+          </div>
+          <div>
+            <label className="cms-label">Class teacher</label>
+            <input
+              type="text"
+              placeholder="e.g. Dr. Harish Sen"
+              value={newTeacher}
+              onChange={(e) => setNewTeacher(e.target.value)}
+              className={field}
+            />
+          </div>
+          <div>
+            <label className="cms-label">Room</label>
+            <input
+              type="text"
+              placeholder="e.g. Block E - 101"
+              value={newRoom}
+              onChange={(e) => setNewRoom(e.target.value)}
+              className={field}
+            />
+          </div>
+        </form>
+      </Modal>
 
       <Modal
         open={Boolean(editingCell)}
