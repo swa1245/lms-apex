@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Class Management System</title>
+    <meta name="description" content="A modern, comprehensive school and class management system featuring student admissions, fee tracking, attendance, exams, reports, and administrative controls." />
+    <meta property="og:title" content="Class Management System" />
+    <meta property="og:description" content="A modern, comprehensive school and class management system featuring student admissions, fee tracking, attendance, exams, reports, and administrative controls." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+    <script>
+      (function() {
+        // Prevent Vite dev client WebSocket HMR errors in cloud sandbox
+        try {
+          var OriginalWS = window.WebSocket;
+          if (OriginalWS) {
+            window.WebSocket = function(url, protocols) {
+              var isViteHmr = (protocols === 'vite-hmr' || protocols === 'vite-ping' || (typeof url === 'string' && url.indexOf('token=') !== -1));
+              if (isViteHmr) {
+                var dummy = new EventTarget();
+                dummy.readyState = 1;
+                dummy.close = function() {};
+                dummy.send = function() {};
+                setTimeout(function() {
+                  try { dummy.dispatchEvent(new Event('open')); } catch(e) {}
+                }, 5);
+                return dummy;
+              }
+              return new OriginalWS(url, protocols);
+            };
+            window.WebSocket.prototype = OriginalWS.prototype;
+          }
+        } catch(e) {}
+
+        // Suppress unhandled rejection events for benign WebSocket closures
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event && event.reason;
+          var msg = (reason && (reason.message || String(reason))) || '';
+          if (msg.indexOf('WebSocket') !== -1 || msg.indexOf('websocket') !== -1) {
+            event.preventDefault();
+            if (typeof event.stopImmediatePropagation === 'function') {
+              event.stopImmediatePropagation();
+            }
+          }
+        }, true);
+
+        // Suppress console.error output for benign Vite dev websocket closures
+        var origConsoleError = console.error;
+        console.error = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var fullText = args.map(function(a) { return String(a); }).join(' ');
+          if (fullText.indexOf('[vite] failed to connect to websocket') !== -1 || fullText.indexOf('WebSocket closed without opened') !== -1) {
+            return;
+          }
+          origConsoleError.apply(console, arguments);
+        };
+      })();
+    </script>
+  </head>
+  <body class="antialiased font-sans">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

@@ -1,0 +1,6 @@
+{
+  "name": "Class Management System",
+  "description": "A modern, comprehensive school and class management system featuring student admissions, fee tracking, attendance, exams, reports, and administrative controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
