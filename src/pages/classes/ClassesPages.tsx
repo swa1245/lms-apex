@@ -769,7 +769,8 @@ export const TimetablePage: React.FC = () => {
       return;
     }
     if (!classes.some((item) => item.name === selectedClass)) {
-      setSelectedClass(classes[0].name);
+      const firstName = classes[0]?.name;
+      if (firstName) setSelectedClass(firstName);
     }
   }, [classes, selectedClass]);
 

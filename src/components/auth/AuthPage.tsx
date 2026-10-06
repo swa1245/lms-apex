@@ -11,8 +11,9 @@ import { useApp } from '../../context/AppContext';
 import { backendClient } from '../../api/backendClient';
 import type { AuthUser } from '../../types/auth';
 import { getErrorMessage } from '../../utils/errors';
-import { LOCAL_DEMO_PASSWORD, LOCAL_ONLY, verifyLocalPassword } from '../../config/localMode';
+import { LOCAL_ONLY, verifyLocalPassword } from '../../config/localMode';
 import { DEFAULT_USERS } from '../../data/localStorageManager';
+import type { UserAccount } from '../../types';
 import { LegalDocumentPage, type LegalDoc } from '../../pages/legal/LegalPages';
 
 const FEATURES = [
@@ -22,13 +23,17 @@ const FEATURES = [
 ] as const;
 
 export const AuthPage: React.FC = () => {
-  const { showToast, setCurrentUser, setIsAuthenticated, users } = useApp();
+  const { showToast, setCurrentUser, setIsAuthenticated, setCurrentRoute, users, completeStudentPasswordReset } = useApp();
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState(LOCAL_ONLY ? 'admin@apexschool.edu' : '');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null);
+  const [resetAccount, setResetAccount] = useState<UserAccount | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const activeStep = 1;
 
@@ -59,15 +64,26 @@ export const AuthPage: React.FC = () => {
           users.find((user) => user.email.toLowerCase() === normalized) ||
           DEFAULT_USERS.find((user) => user.email.toLowerCase() === normalized);
         if (!match) {
-          setErrorMessage('No staff account for that email. Use admin@apexschool.edu.');
+          setErrorMessage('No account for that email.');
           return;
         }
         if (match.status === 'Suspended') {
           setErrorMessage('This account is suspended. Ask an administrator to reactivate it.');
           return;
         }
-        if (!verifyLocalPassword(email, password)) {
-          setErrorMessage(`Wrong password. The demo password is ${LOCAL_DEMO_PASSWORD}.`);
+        if (!verifyLocalPassword(email, password, match.role)) {
+          setErrorMessage(
+            match.role === 'student'
+              ? 'Wrong password. Use the temporary password from the school, or the new password you created.'
+              : 'Wrong password.',
+          );
+          return;
+        }
+        if (match.role === 'student' && match.mustChangePassword) {
+          setResetAccount(match);
+          setNewPassword('');
+          setConfirmPassword('');
+          setInfoMessage('');
           return;
         }
         finishAuth({
@@ -77,7 +93,10 @@ export const AuthPage: React.FC = () => {
           role: match.role,
           phone: match.phone,
           designation: match.department,
+          studentId: match.studentId,
+          mustChangePassword: false,
         });
+        setCurrentRoute(match.role === 'student' ? 'student/home' : 'dashboard');
         return;
       }
 
@@ -118,13 +137,13 @@ export const AuthPage: React.FC = () => {
 
             <div className="mt-16 max-w-md">
               <span className="inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-xs font-semibold backdrop-blur-sm">
-                Secure staff access
+                Secure access
               </span>
               <h1 className="mt-5 text-[2.75rem] font-extrabold leading-[1.08] tracking-tight">
                 Welcome back
               </h1>
               <p className="mt-3 text-[15px] leading-relaxed text-white/90">
-                Sign in with your assigned credentials to manage students, fees, and attendance.
+                Staff manage the school. Students sign in to see their profile, assignments, quizzes, and attendance.
               </p>
             </div>
           </div>
@@ -169,10 +188,98 @@ export const AuthPage: React.FC = () => {
           </div>
 
           <div className="mx-auto w-full max-w-[420px]">
+            {resetAccount ? (
+              <>
+                <h2 className="text-center text-[1.65rem] font-bold tracking-tight text-slate-900">Set a new password</h2>
+                <p className="mt-1.5 text-center text-sm text-slate-500">
+                  This is your first sign-in for {resetAccount.email}. The school password was temporary. Choose a new one, then sign in with it.
+                </p>
+                {errorMessage ? (
+                  <div className="mt-5 flex items-start gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-700">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span className="leading-snug">{errorMessage}</span>
+                  </div>
+                ) : null}
+                <form
+                  className="mt-6 space-y-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    setErrorMessage('');
+                    if (newPassword.trim().length < 8) {
+                      setErrorMessage('Use at least 8 characters.');
+                      return;
+                    }
+                    if (newPassword !== confirmPassword) {
+                      setErrorMessage('The two passwords do not match.');
+                      return;
+                    }
+                    try {
+                      completeStudentPasswordReset(resetAccount.email, newPassword);
+                      const savedEmail = resetAccount.email;
+                      setResetAccount(null);
+                      setEmail(savedEmail);
+                      setPassword('');
+                      setNewPassword('');
+                      setConfirmPassword('');
+                      setInfoMessage('Password saved. Sign in with your new password.');
+                    } catch (error) {
+                      setErrorMessage(error instanceof Error ? error.message : 'Could not save the password.');
+                    }
+                  }}
+                >
+                  <div className="space-y-1.5">
+                    <label htmlFor="auth-new-password" className="block text-sm font-medium text-slate-600">New password</label>
+                    <input
+                      id="auth-new-password"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="auth-confirm-password" className="block text-sm font-medium text-slate-600">Confirm password</label>
+                    <input
+                      id="auth-confirm-password"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      className={fieldClass}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((value) => !value)}
+                    className="text-xs font-semibold text-slate-500"
+                  >
+                    {showPassword ? 'Hide passwords' : 'Show passwords'}
+                  </button>
+                  <button
+                    type="submit"
+                    className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[#2F6BFF] text-sm font-bold text-white shadow-[0_12px_28px_rgba(47,107,255,0.35)] transition hover:bg-[#2559E0]"
+                  >
+                    Save password
+                  </button>
+                </form>
+              </>
+            ) : (
+              <>
             <h2 className="text-center text-[1.65rem] font-bold tracking-tight text-slate-900">Log In</h2>
             <p className="mt-1.5 text-center text-sm text-slate-500">
-              Enter your credentials to continue
+              Staff and students sign in here. Nothing is sent to a server.
             </p>
+
+            {infoMessage ? (
+              <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-3.5 text-sm text-emerald-800">
+                {infoMessage}
+              </div>
+            ) : null}
 
             {errorMessage ? (
               <div className="mt-5 flex items-start gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-700">
@@ -238,10 +345,10 @@ export const AuthPage: React.FC = () => {
             </form>
 
             <p className="mt-5 text-center text-sm text-slate-500">
-              {LOCAL_ONLY
-                ? `Local demo — no server. Sign in with admin@apexschool.edu / ${LOCAL_DEMO_PASSWORD}. Data stays in this browser.`
-                : 'Access is invite-only. Contact your administrator for an account.'}
+              Students use the email and temporary password from the school. The first sign-in asks for a new password. Records stay in this browser.
             </p>
+              </>
+            )}
 
             <p className="mt-5 text-center text-[11px] leading-relaxed text-slate-400">
               By continuing you agree to Campus LMS{' '}

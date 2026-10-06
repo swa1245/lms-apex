@@ -40,7 +40,12 @@ export const STORAGE_KEYS = {
   AUDIT_LOGS: 'cms_audit_logs',
   FEATURE_TOGGLES: 'cms_feature_toggles',
   PERMISSION_MATRIX: 'cms_permission_matrix',
-  SYSTEM_MAINTENANCE: 'cms_system_maintenance_mode'
+  SYSTEM_MAINTENANCE: 'cms_system_maintenance_mode',
+  ASSIGNMENTS: 'cms_assignments',
+  ASSIGNMENT_SUBMISSIONS: 'cms_assignment_submissions',
+  QUIZZES: 'cms_quizzes',
+  QUIZ_ATTEMPTS: 'cms_quiz_attempts',
+  ATTENDANCE_REQUESTS: 'cms_attendance_requests',
 };
 
 // Default institution master setup
@@ -147,8 +152,45 @@ export const DEFAULT_USERS: UserAccount[] = [
     createdAt: '2023-07-20',
     department: 'PTA Committee',
     assignedBranch: 'Apex Main Campus'
+  },
+  {
+    id: 'usr-student-demo',
+    name: 'Aarav Shah',
+    email: 'aarav.shah@apexschool.edu',
+    role: 'student',
+    phone: '+91 98111 22233',
+    status: 'Active',
+    createdAt: '2026-04-01',
+    department: 'Class 5 A',
+    studentId: 'STU-DEMO-1',
+    mustChangePassword: true,
   }
 ];
+
+export const DEMO_STUDENT: Student = {
+  id: 'STU-DEMO-1',
+  admissionNo: 'ADM-DEMO-1',
+  name: 'Aarav Shah',
+  gender: 'Male',
+  dob: '2012-04-12',
+  className: 'Class 5',
+  section: 'A',
+  rollNo: '12',
+  parentName: 'Neha Shah',
+  parentPhone: '+91 98111 22233',
+  parentEmail: 'neha.shah@example.com',
+  address: 'Dwarka, New Delhi',
+  avatar: '',
+  status: 'Active',
+  admissionDate: '2026-04-01',
+  bloodGroup: 'O+',
+  emergencyContact: '+91 98111 22233',
+  feeStatus: 'Pending',
+  totalFee: 45000,
+  paidFee: 0,
+  attendanceRate: 0,
+  loginEmail: 'aarav.shah@apexschool.edu',
+};
 
 export const DEFAULT_FEATURE_TOGGLES: SystemFeatureToggle[] = [
   {

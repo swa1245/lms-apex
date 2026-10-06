@@ -7,6 +7,7 @@ import {
   Download,
   Eye,
   Trash2,
+  KeyRound,
   Phone,
   Mail,
   UserCheck,
@@ -16,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Student } from '../../types';
-import { Button, EmptyState, PageHeader, Select } from '../../components/ui';
+import { Button, EmptyState, Modal, PageHeader, Select } from '../../components/ui';
 import { AddStudentModal } from '../../components/modals/AddStudentModal';
 
 type StudentListPageProps = {
@@ -24,11 +25,15 @@ type StudentListPageProps = {
 };
 
 export const StudentListPage: React.FC<StudentListPageProps> = ({ openAddOnMount = false }) => {
-  const { students, setSelectedStudentId, setCurrentRoute, deleteStudent, showToast } = useApp();
+  const { students, setSelectedStudentId, setCurrentRoute, deleteStudent, showToast, grantStudentLogin } = useApp();
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [addOpen, setAddOpen] = useState(openAddOnMount);
+  const [loginStudent, setLoginStudent] = useState<Student | null>(null);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginShare, setLoginShare] = useState<{ email: string; temporaryPassword: string } | null>(null);
 
   useEffect(() => {
     if (openAddOnMount) setAddOpen(true);
@@ -81,6 +86,70 @@ export const StudentListPage: React.FC<StudentListPageProps> = ({ openAddOnMount
       />
 
       <AddStudentModal open={addOpen} onClose={closeAdd} />
+
+      <Modal
+        open={Boolean(loginStudent)}
+        onClose={() => setLoginStudent(null)}
+        title="Student login"
+        description={loginStudent ? `Portal access for ${loginStudent.name}` : ''}
+        size="md"
+        footer={
+          loginShare ? (
+            <Button type="button" onClick={() => setLoginStudent(null)}>Done</Button>
+          ) : (
+            <>
+              <Button type="button" variant="secondary" onClick={() => setLoginStudent(null)}>Cancel</Button>
+              <Button type="submit" form="student-login-form">Save login</Button>
+            </>
+          )
+        }
+      >
+        {loginShare ? (
+          <div className="space-y-2 text-sm">
+            <p className="font-semibold text-slate-800">Share these details. The first sign-in asks the student to choose a new password.</p>
+            <p className="rounded-xl bg-slate-50 p-3 font-mono text-xs">Email: {loginShare.email}<br />Password: {loginShare.temporaryPassword}</p>
+          </div>
+        ) : (
+          <form
+            id="student-login-form"
+            className="space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!loginStudent) return;
+              try {
+                const creds = grantStudentLogin(loginStudent.id, loginEmail, loginPassword);
+                setLoginShare(creds);
+              } catch (error) {
+                showToast('Login not created', error instanceof Error ? error.message : 'Could not create the login.', 'warning');
+              }
+            }}
+          >
+            <div>
+              <label className="cms-label">Login email</label>
+              <input
+                required
+                type="email"
+                value={loginEmail}
+                onChange={(event) => setLoginEmail(event.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs"
+                placeholder="student@school.edu"
+              />
+            </div>
+            <div>
+              <label className="cms-label">Temporary password</label>
+              <input
+                required
+                minLength={8}
+                type="text"
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs"
+                placeholder="At least 8 characters"
+              />
+            </div>
+          </form>
+        )}
+      </Modal>
 
       {/* Filter Bar */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between transition-colors">
@@ -232,6 +301,18 @@ export const StudentListPage: React.FC<StudentListPageProps> = ({ openAddOnMount
                           title="View Full Profile"
                         >
                           <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setLoginStudent(student);
+                            setLoginEmail(student.loginEmail || '');
+                            setLoginPassword('');
+                            setLoginShare(null);
+                          }}
+                          className="p-1.5 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 rounded-lg transition-colors cursor-pointer"
+                          title="Student login"
+                        >
+                          <KeyRound className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => {

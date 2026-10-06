@@ -42,6 +42,13 @@ import {
   UserManagementPage,
   BackupRestorePage
 } from './pages';
+import { AssignmentsPage, QuizzesPage } from './pages/performance/PerformancePages';
+import {
+  StudentHomePage,
+  StudentAssignmentsPage,
+  StudentQuizzesPage,
+  StudentAttendancePortalPage,
+} from './pages/student/StudentPortalPages';
 import { PrivacyPolicyPage, TermsAndConditionsPage } from './pages/legal/LegalPages';
 
 const MainLayout: React.FC = () => {
@@ -79,6 +86,16 @@ const MainLayout: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentRoute, setCurrentRoute, showToast, isAuthenticated, canAccessSuperAdmin]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser) return;
+    if (currentUser.role === 'student' && !currentRoute.startsWith('student/') && !currentRoute.startsWith('legal/')) {
+      setCurrentRoute('student/home');
+    }
+    if (currentUser.role !== 'student' && currentRoute.startsWith('student/')) {
+      setCurrentRoute('dashboard');
+    }
+  }, [currentRoute, currentUser, isAuthenticated, setCurrentRoute]);
 
   // URL trigger only in development, and only for allowed roles
   useEffect(() => {
@@ -206,6 +223,20 @@ const MainLayout: React.FC = () => {
       case 'attendance/attendance-reports':
         return <AttendanceReportsPage />;
 
+      case 'performance/assignments':
+        return <AssignmentsPage />;
+      case 'performance/quizzes':
+        return <QuizzesPage />;
+
+      case 'student/home':
+        return <StudentHomePage />;
+      case 'student/assignments':
+        return <StudentAssignmentsPage />;
+      case 'student/quizzes':
+        return <StudentQuizzesPage />;
+      case 'student/attendance':
+        return <StudentAttendancePortalPage />;
+
       // Expenses
       case 'expenses/expense-entry':
       case 'expenses/expense-list':
@@ -287,7 +318,7 @@ const MainLayout: React.FC = () => {
         </main>
       </div>
 
-      <SearchModal />
+      {currentUser?.role === 'student' ? null : <SearchModal />}
 
       {toastMessage ? <Toast message={toastMessage} onClose={clearToast} /> : null}
     </div>

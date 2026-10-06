@@ -17,7 +17,7 @@ import {
   Code,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { NAV_SECTIONS } from './Sidebar';
+import { NAV_SECTIONS, STUDENT_NAV } from './Sidebar';
 
 export const TopHeader: React.FC = () => {
   const {
@@ -90,6 +90,10 @@ export const TopHeader: React.FC = () => {
     if (currentRoute === 'dashboard') {
       return { section: 'Overview', title: 'Dashboard Overview' };
     }
+    const studentPage = STUDENT_NAV.find((item) => item.route === currentRoute);
+    if (studentPage) {
+      return { section: 'Student portal', title: studentPage.label };
+    }
     if (currentRoute.startsWith('superadmin/')) {
       const sub = currentRoute.replace('superadmin/', '');
       const map: Record<string, string> = {
@@ -157,6 +161,7 @@ export const TopHeader: React.FC = () => {
       {/* Center/Right controls */}
       <div className="flex items-center gap-2 lg:gap-3">
         {/* Global Search Bar */}
+        {currentUser?.role === 'student' ? null : (
         <div
           onClick={() => setIsSearchModalOpen(true)}
           className="hidden md:flex items-center gap-2 px-3 py-2 bg-slate-100/80 dark:bg-slate-800 hover:bg-slate-100 text-slate-500 dark:text-slate-400 rounded-xl cursor-pointer border border-slate-200/70 dark:border-slate-700 transition-all w-48 lg:w-72 group"
@@ -168,8 +173,10 @@ export const TopHeader: React.FC = () => {
             ⌘K
           </kbd>
         </div>
+        )}
 
         {/* Mobile Search Icon Button */}
+        {currentUser?.role === 'student' ? null : (
         <button
           onClick={() => setIsSearchModalOpen(true)}
           className="md:hidden p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -178,6 +185,7 @@ export const TopHeader: React.FC = () => {
         >
           <Search className="w-5 h-5" />
         </button>
+        )}
 
         {/* Academic Year Dropdown */}
         <div className="relative" ref={yearRef}>

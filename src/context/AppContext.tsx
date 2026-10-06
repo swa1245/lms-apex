@@ -30,6 +30,11 @@ import {
   StudentHistoryEvent,
   AttendanceRecord,
   AttendanceRow,
+  AssignmentItem,
+  AssignmentSubmission,
+  QuizItem,
+  QuizAttempt,
+  AttendanceRequest,
 } from '../types';
 import type { AuthUser } from '../types/auth';
 import { getErrorMessage } from '../utils/errors';
@@ -52,6 +57,7 @@ import {
   STORAGE_KEYS,
   DEFAULT_INSTITUTION_CONFIG,
   DEFAULT_USERS,
+  DEMO_STUDENT,
   DEFAULT_FEATURE_TOGGLES,
   DEFAULT_AUDIT_LOGS,
   DEFAULT_PERMISSION_MATRIX,
@@ -60,7 +66,7 @@ import {
   clearAllLocalDatabase
 } from '../data/localStorageManager';
 import { backendClient, getAuthToken, clearAuthToken } from '../api/backendClient';
-import { LOCAL_ONLY, LOCAL_DEMO_PASSWORD, setLocalPassword } from '../config/localMode';
+import { LOCAL_ONLY, LOCAL_DEMO_PASSWORD, DEMO_STUDENT_EMAIL, setLocalPassword, getLocalPassword } from '../config/localMode';
 
 interface AppContextType {
   currentRoute: string;
@@ -100,7 +106,7 @@ interface AppContextType {
   setStudents: React.Dispatch<React.SetStateAction<Student[]>>;
   selectedStudent: Student | null;
   setSelectedStudentId: (id: string | null) => void;
-  addStudent: (student: Omit<Student, 'id'>) => Promise<void>;
+  addStudent: (student: Omit<Student, 'id'>) => Promise<Student>;
   updateStudent: (id: string, updated: Partial<Student>) => Promise<void>;
   deleteStudent: (id: string) => Promise<void>;
 
@@ -166,6 +172,23 @@ interface AppContextType {
   ) => Promise<void>;
   attendanceRecords: AttendanceRow[];
   setAttendanceRecords: React.Dispatch<React.SetStateAction<AttendanceRow[]>>;
+
+  assignments: AssignmentItem[];
+  submissions: AssignmentSubmission[];
+  quizzes: QuizItem[];
+  quizAttempts: QuizAttempt[];
+  attendanceRequests: AttendanceRequest[];
+  grantStudentLogin: (studentId: string, email: string, password?: string, known?: Student) => { email: string; temporaryPassword: string };
+  completeStudentPasswordReset: (email: string, newPassword: string) => void;
+  addAssignment: (item: Omit<AssignmentItem, 'id' | 'createdAt'>) => void;
+  deleteAssignment: (id: string) => void;
+  submitAssignment: (payload: { assignmentId: string; studentId: string; studentName: string; fileName: string; fileData: string }) => void;
+  gradeSubmission: (id: string, marks: number, feedback: string, gradedBy: string) => void;
+  addQuiz: (item: Omit<QuizItem, 'id' | 'createdAt'>) => void;
+  deleteQuiz: (id: string) => void;
+  submitQuiz: (payload: { quizId: string; studentId: string; studentName: string; answers: number[]; score: number }) => void;
+  requestAttendance: (payload: { studentId: string; studentName: string; className: string; section: string; date: string; note: string }) => void;
+  noteAttendanceRequest: (id: string) => void;
 
   timetable: TimetableEntry[];
   setTimetable: React.Dispatch<React.SetStateAction<TimetableEntry[]>>;
@@ -372,6 +395,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return getLocalItem(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
   });
 
+  useEffect(() => {
+    if (!getLocalPassword(DEMO_STUDENT_EMAIL)) {
+      setLocalPassword(DEMO_STUDENT_EMAIL, LOCAL_DEMO_PASSWORD);
+    }
+    setUsers((prev) => {
+      if (prev.some((user) => user.email.toLowerCase() === DEMO_STUDENT_EMAIL)) return prev;
+      const demoUser = DEFAULT_USERS.find((user) => user.email.toLowerCase() === DEMO_STUDENT_EMAIL);
+      if (!demoUser) return prev;
+      const saved = getLocalPassword(DEMO_STUDENT_EMAIL);
+      return [...prev, { ...demoUser, mustChangePassword: !saved || saved === LOCAL_DEMO_PASSWORD }];
+    });
+    setStudents((prev) => {
+      if (prev.some((student) => student.id === DEMO_STUDENT.id || student.loginEmail?.toLowerCase() === DEMO_STUDENT_EMAIL)) {
+        return prev;
+      }
+      return [DEMO_STUDENT, ...prev];
+    });
+  }, []);
+
   const [selectedStudentId, setSelectedStudentIdState] = useState<string | null>(() => {
     return localStorage.getItem('cms_selected_student') || (students[0]?.id || null);
   });
@@ -433,6 +475,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRow[]>(() => {
     return getLocalItem<AttendanceRow[]>('cms_attendance', []);
   });
+  const [assignments, setAssignments] = useState<AssignmentItem[]>(() => getLocalItem(STORAGE_KEYS.ASSIGNMENTS, []));
+  const [submissions, setSubmissions] = useState<AssignmentSubmission[]>(() => getLocalItem(STORAGE_KEYS.ASSIGNMENT_SUBMISSIONS, []));
+  const [quizzes, setQuizzes] = useState<QuizItem[]>(() => getLocalItem(STORAGE_KEYS.QUIZZES, []));
+  const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>(() => getLocalItem(STORAGE_KEYS.QUIZ_ATTEMPTS, []));
+  const [attendanceRequests, setAttendanceRequests] = useState<AttendanceRequest[]>(() => getLocalItem(STORAGE_KEYS.ATTENDANCE_REQUESTS, []));
 
   const [accountSettingsId, setAccountSettingsId] = useState<string | null>(null);
   const [accountSettingsHydrated, setAccountSettingsHydrated] = useState(false);
@@ -755,6 +802,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [attendanceRecords]);
 
   useEffect(() => {
+    setLocalItem(STORAGE_KEYS.ASSIGNMENTS, assignments);
+  }, [assignments]);
+
+  useEffect(() => {
+    setLocalItem(STORAGE_KEYS.ASSIGNMENT_SUBMISSIONS, submissions);
+  }, [submissions]);
+
+  useEffect(() => {
+    setLocalItem(STORAGE_KEYS.QUIZZES, quizzes);
+  }, [quizzes]);
+
+  useEffect(() => {
+    setLocalItem(STORAGE_KEYS.QUIZ_ATTEMPTS, quizAttempts);
+  }, [quizAttempts]);
+
+  useEffect(() => {
+    setLocalItem(STORAGE_KEYS.ATTENDANCE_REQUESTS, attendanceRequests);
+  }, [attendanceRequests]);
+
+  useEffect(() => {
     const map: Record<string, TimetablePeriodSlot[]> = {};
     for (const config of timetablePeriodConfigs) {
       if (config.className) map[config.className] = config.periods;
@@ -964,7 +1031,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Ignore
       }
       showToast('Student Admitted', `${created.name} saved in this browser.`, 'success');
-      return;
+      return created;
     }
 
     try {
@@ -1010,6 +1077,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       showToast('Student Admitted Successfully', `${created.name} saved to backend database.`, 'success');
+      return created;
     } catch (err: unknown) {
       showToast('Student Save Failed', getErrorMessage(err, 'Could not save student to backend.'), 'danger');
       throw err;
@@ -1039,6 +1107,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const target = students.find(s => s.id === id);
     if (LOCAL_ONLY || !getAuthToken()) {
       setStudents((prev) => prev.filter((student) => student.id !== id));
+      setUsers((prev) => prev.filter((user) => user.studentId !== id));
       logAuditAction(`Deleted Student (${id})`, 'Students Subsystem', `Removed ${target?.name || id} from this browser`, 'Warning');
       showToast('Student Removed', 'Student deleted from this browser.', 'warning');
       return;
@@ -1950,6 +2019,151 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const grantStudentLogin = (studentId: string, email: string, password?: string, known?: Student) => {
+    const student = known || students.find((item) => item.id === studentId);
+    if (!student) throw new Error('Student not found.');
+    const normalized = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+      throw new Error('Enter a valid login email.');
+    }
+    const temporaryPassword = (password || '').trim() || LOCAL_DEMO_PASSWORD;
+    if (temporaryPassword.length < 8) {
+      throw new Error('Password must be at least 8 characters.');
+    }
+    const clash = users.find((user) => user.email.toLowerCase() === normalized && user.studentId !== studentId);
+    if (clash) throw new Error('That email is already used by another account.');
+    setLocalPassword(normalized, temporaryPassword);
+    setUsers((prev) => {
+      const existing = prev.find((user) => user.studentId === studentId);
+      const account: UserAccount = {
+        id: existing?.id || `usr-${studentId}`,
+        name: student.name,
+        email: normalized,
+        role: 'student',
+        status: existing?.status === 'Suspended' ? 'Suspended' : 'Active',
+        phone: student.parentPhone,
+        createdAt: existing?.createdAt || new Date().toISOString(),
+        studentId,
+        department: `${student.className} ${student.section}`.trim(),
+        mustChangePassword: true,
+      };
+      return existing
+        ? prev.map((user) => (user.studentId === studentId ? account : user))
+        : [account, ...prev];
+    });
+    setStudents((prev) => prev.map((item) => (item.id === studentId ? { ...item, loginEmail: normalized } : item)));
+    logAuditAction(`Student login: ${student.name}`, 'Student Portal', normalized);
+    return { email: normalized, temporaryPassword };
+  };
+
+  const completeStudentPasswordReset = (email: string, newPassword: string) => {
+    const normalized = email.trim().toLowerCase();
+    const next = newPassword.trim();
+    if (next.length < 8) throw new Error('Use at least 8 characters.');
+    const current = getLocalPassword(normalized);
+    if (current && next === current) throw new Error('Choose a password that is different from the temporary one.');
+    setLocalPassword(normalized, next);
+    setUsers((prev) =>
+      prev.map((user) => (user.email.toLowerCase() === normalized ? { ...user, mustChangePassword: false } : user)),
+    );
+  };
+
+  const addAssignment = (item: Omit<AssignmentItem, 'id' | 'createdAt'>) => {
+    const created: AssignmentItem = { ...item, id: `asg-${Date.now()}`, createdAt: new Date().toISOString() };
+    setAssignments((prev) => [created, ...prev]);
+    showToast('Assignment saved', `${created.title} is ready for students.`, 'success');
+  };
+
+  const deleteAssignment = (id: string) => {
+    setAssignments((prev) => prev.filter((item) => item.id !== id));
+    setSubmissions((prev) => prev.filter((item) => item.assignmentId !== id));
+    showToast('Assignment removed', 'That assignment and its answers were removed from this browser.', 'warning');
+  };
+
+  const submitAssignment = (payload: { assignmentId: string; studentId: string; studentName: string; fileName: string; fileData: string }) => {
+    const existing = submissions.find((item) => item.assignmentId === payload.assignmentId && item.studentId === payload.studentId);
+    if (existing?.marks != null) {
+      showToast('Already graded', 'This answer is graded. Ask your teacher before sending another file.', 'warning');
+      return;
+    }
+    const next: AssignmentSubmission = {
+      id: existing?.id || `sub-${Date.now()}`,
+      assignmentId: payload.assignmentId,
+      studentId: payload.studentId,
+      studentName: payload.studentName,
+      fileName: payload.fileName,
+      fileData: payload.fileData,
+      submittedAt: new Date().toISOString(),
+      marks: null,
+      feedback: '',
+    };
+    setSubmissions((prev) => [next, ...prev.filter((item) => item.id !== next.id)]);
+    showToast('Answer submitted', 'Your PDF is with the teacher.', 'success');
+  };
+
+  const gradeSubmission = (id: string, marks: number, feedback: string, gradedBy: string) => {
+    setSubmissions((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, marks, feedback, gradedBy, gradedAt: new Date().toISOString() }
+          : item,
+      ),
+    );
+    showToast('Grade saved', 'The student can see this mark on their portal.', 'success');
+  };
+
+  const addQuiz = (item: Omit<QuizItem, 'id' | 'createdAt'>) => {
+    const created: QuizItem = { ...item, id: `quiz-${Date.now()}`, createdAt: new Date().toISOString() };
+    setQuizzes((prev) => [created, ...prev]);
+    showToast('Quiz saved', `${created.title} is open for that class.`, 'success');
+  };
+
+  const deleteQuiz = (id: string) => {
+    setQuizzes((prev) => prev.filter((item) => item.id !== id));
+    setQuizAttempts((prev) => prev.filter((item) => item.quizId !== id));
+    showToast('Quiz removed', 'That quiz and its attempts were removed from this browser.', 'warning');
+  };
+
+  const submitQuiz = (payload: { quizId: string; studentId: string; studentName: string; answers: number[]; score: number }) => {
+    if (quizAttempts.some((item) => item.quizId === payload.quizId && item.studentId === payload.studentId)) {
+      showToast('Already submitted', 'You can take this quiz only once.', 'warning');
+      return;
+    }
+    const attempt: QuizAttempt = {
+      id: `qa-${Date.now()}`,
+      quizId: payload.quizId,
+      studentId: payload.studentId,
+      studentName: payload.studentName,
+      answers: payload.answers,
+      score: payload.score,
+      submittedAt: new Date().toISOString(),
+    };
+    setQuizAttempts((prev) => [attempt, ...prev]);
+    showToast('Quiz submitted', `Score ${payload.score}.`, 'success');
+  };
+
+  const requestAttendance = (payload: { studentId: string; studentName: string; className: string; section: string; date: string; note: string }) => {
+    const duplicate = attendanceRequests.find(
+      (item) => item.studentId === payload.studentId && item.date === payload.date && item.status === 'Pending',
+    );
+    if (duplicate) {
+      showToast('Already sent', 'Your teacher already has a request for that date.', 'info');
+      return;
+    }
+    const created: AttendanceRequest = {
+      id: `ar-${Date.now()}`,
+      ...payload,
+      status: 'Pending',
+      createdAt: new Date().toISOString(),
+    };
+    setAttendanceRequests((prev) => [created, ...prev]);
+    showToast('Request sent', 'Your teacher will mark the register. This does not mark you present.', 'success');
+  };
+
+  const noteAttendanceRequest = (id: string) => {
+    setAttendanceRequests((prev) => prev.map((item) => (item.id === id ? { ...item, status: 'Noted' } : item)));
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -2058,6 +2272,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         saveDailyAttendance,
         attendanceRecords,
         setAttendanceRecords,
+        assignments,
+        submissions,
+        quizzes,
+        quizAttempts,
+        attendanceRequests,
+        grantStudentLogin,
+        completeStudentPasswordReset,
+        addAssignment,
+        deleteAssignment,
+        submitAssignment,
+        gradeSubmission,
+        addQuiz,
+        deleteQuiz,
+        submitQuiz,
+        requestAttendance,
+        noteAttendanceRequest,
         timetable,
         setTimetable,
         updateTimetableCell,

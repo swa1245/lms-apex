@@ -34,13 +34,21 @@ function buildInitial(yearPrefix: string) {
 }
 
 export function AddStudentModal({ open, onClose }: AddStudentModalProps) {
-  const { addStudent, academicYear, showToast } = useApp();
+  const { addStudent, academicYear, showToast, grantStudentLogin } = useApp();
   const yearPrefix = (academicYear ? academicYear.split('-')[0] : '2026') || '2026';
   const [formData, setFormData] = useState(() => buildInitial(yearPrefix));
   const [saving, setSaving] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [share, setShare] = useState<{ email: string; temporaryPassword: string } | null>(null);
 
   useEffect(() => {
-    if (open) setFormData(buildInitial(yearPrefix));
+    if (open) {
+      setFormData(buildInitial(yearPrefix));
+      setLoginEmail('');
+      setLoginPassword('');
+      setShare(null);
+    }
   }, [open, yearPrefix]);
 
   const field =
@@ -64,12 +72,22 @@ export function AddStudentModal({ open, onClose }: AddStudentModalProps) {
     }
     setSaving(true);
     try {
-      await addStudent({
+      const created = await addStudent({
         ...formData,
         name: formData.name.trim(),
         parentName: formData.parentName.trim(),
         rollNo: formData.rollNo || '—',
+        loginEmail: loginEmail.trim().toLowerCase() || undefined,
       });
+      if (loginEmail.trim()) {
+        try {
+          const creds = grantStudentLogin(created.id, loginEmail, loginPassword, created);
+          setShare(creds);
+          return;
+        } catch (error) {
+          showToast('Login not created', error instanceof Error ? error.message : 'Could not create the student login.', 'warning');
+        }
+      }
       onClose();
     } finally {
       setSaving(false);
@@ -85,6 +103,9 @@ export function AddStudentModal({ open, onClose }: AddStudentModalProps) {
       description="Quick enrollment — academic details, guardian contact, and fee baseline"
       icon={<UserPlus className="h-5 w-5" />}
       footer={
+        share ? (
+          <Button type="button" onClick={onClose}>Done</Button>
+        ) : (
         <>
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
@@ -93,8 +114,16 @@ export function AddStudentModal({ open, onClose }: AddStudentModalProps) {
             {saving ? 'Saving…' : 'Admit Student'}
           </Button>
         </>
+        )
       }
     >
+      {share ? (
+        <div className="space-y-3 text-sm">
+          <p className="font-semibold text-slate-800">Share these student login details. They are shown once.</p>
+          <p className="rounded-xl bg-slate-50 p-3 font-mono text-xs text-slate-700">Email: {share.email}<br />Password: {share.temporaryPassword}</p>
+          <p className="text-xs text-slate-500">The student signs in with this email and temporary password. The first time, they must choose a new password. After that, only the new password works.</p>
+        </div>
+      ) : (
       <form id="add-student-modal-form" onSubmit={handleSubmit} className="space-y-5">
         <section className="space-y-3">
           <div className="flex items-center gap-2">
@@ -250,7 +279,41 @@ export function AddStudentModal({ open, onClose }: AddStudentModalProps) {
             </div>
           </div>
         </section>
+
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
+            <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Student login</h3>
+          </div>
+          <p className="text-[11px] text-slate-500">Required. The student signs in with this email and temporary password. The first time, they must choose a new password.</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="cms-label">Login email *</label>
+              <input
+                required
+                type="email"
+                className={field}
+                placeholder="student@school.edu"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="cms-label">Temporary password *</label>
+              <input
+                required
+                minLength={8}
+                type="text"
+                className={field}
+                placeholder="At least 8 characters"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+              />
+            </div>
+          </div>
+        </section>
       </form>
+      )}
     </Modal>
   );
 }

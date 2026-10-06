@@ -16,7 +16,7 @@ import { useApp } from '../../context/AppContext';
 import { Select } from '../../components/ui';
 
 export const DailyAttendancePage: React.FC = () => {
-  const { students, classes, showToast, addActivity, saveDailyAttendance } = useApp();
+  const { students, classes, showToast, addActivity, saveDailyAttendance, attendanceRequests, noteAttendanceRequest } = useApp();
   const [selectedClass, setSelectedClass] = useState(() => classes[0]?.name || '');
   const [selectedSection, setSelectedSection] = useState(() => classes[0]?.sections[0] || 'A');
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().slice(0, 10));
@@ -174,6 +174,21 @@ export const DailyAttendancePage: React.FC = () => {
           />
         </div>
       </div>
+
+      {attendanceRequests.filter((item) => item.status === 'Pending' && item.date === attendanceDate && (!selectedClass || item.className === selectedClass)).length > 0 ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <p className="text-xs font-bold text-amber-900">Student requests for this date</p>
+          <p className="text-[11px] text-amber-800">These notes do not mark attendance. Use the register below to set Present, Absent, Leave, or Half Day.</p>
+          {attendanceRequests
+            .filter((item) => item.status === 'Pending' && item.date === attendanceDate && (!selectedClass || item.className === selectedClass))
+            .map((item) => (
+              <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-xs">
+                <span><b>{item.studentName}</b> · {item.className} {item.section} · {item.note}</span>
+                <button type="button" className="font-bold text-blue-700" onClick={() => noteAttendanceRequest(item.id)}>Noted</button>
+              </div>
+            ))}
+        </div>
+      ) : null}
 
       {/* Attendance Register Table */}
       <div className="cms-panel overflow-hidden">

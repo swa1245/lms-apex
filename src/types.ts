@@ -35,6 +35,7 @@ export interface Student {
   totalFee: number;
   paidFee: number;
   attendanceRate: number;
+  loginEmail?: string;
 }
 
 export interface Parent {
@@ -215,6 +216,76 @@ export interface UserAccount {
   permissions?: string[];
   department?: string;
   assignedBranch?: string;
+  studentId?: string;
+  mustChangePassword?: boolean;
+}
+
+export interface AssignmentItem {
+  id: string;
+  title: string;
+  question: string;
+  dueDate: string;
+  maxMarks: number;
+  audience: 'class' | 'students';
+  className: string;
+  section: string;
+  studentIds: string[];
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface AssignmentSubmission {
+  id: string;
+  assignmentId: string;
+  studentId: string;
+  studentName: string;
+  fileName: string;
+  fileData: string;
+  submittedAt: string;
+  marks: number | null;
+  feedback: string;
+  gradedBy?: string;
+  gradedAt?: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  prompt: string;
+  options: string[];
+  correctIndex: number;
+}
+
+export interface QuizItem {
+  id: string;
+  title: string;
+  className: string;
+  section: string;
+  dueDate: string;
+  questions: QuizQuestion[];
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface QuizAttempt {
+  id: string;
+  quizId: string;
+  studentId: string;
+  studentName: string;
+  answers: number[];
+  score: number;
+  submittedAt: string;
+}
+
+export interface AttendanceRequest {
+  id: string;
+  studentId: string;
+  studentName: string;
+  className: string;
+  section: string;
+  date: string;
+  note: string;
+  status: 'Pending' | 'Noted';
+  createdAt: string;
 }
 
 export interface InstitutionConfig {

@@ -3,6 +3,8 @@ export const LOCAL_ONLY = true;
 
 export const LOCAL_DEMO_PASSWORD = 'Apex#Demo2026';
 
+export const DEMO_STUDENT_EMAIL = 'aarav.shah@apexschool.edu';
+
 if (LOCAL_ONLY && typeof localStorage !== 'undefined') {
   localStorage.removeItem('smartlearning_auth_token');
 }
@@ -24,8 +26,16 @@ export function setLocalPassword(email: string, password: string) {
   localStorage.setItem(PASSWORD_KEY, JSON.stringify(map));
 }
 
-export function verifyLocalPassword(email: string, password: string) {
-  if (password === LOCAL_DEMO_PASSWORD) return true;
+export function getLocalPassword(email: string) {
+  return readPasswords()[email.trim().toLowerCase()] || '';
+}
+
+export function verifyLocalPassword(email: string, password: string, role?: string) {
   const stored = readPasswords()[email.trim().toLowerCase()];
+  if (role === 'student') {
+    if (stored) return password === stored;
+    return password === LOCAL_DEMO_PASSWORD;
+  }
+  if (password === LOCAL_DEMO_PASSWORD) return true;
   return Boolean(stored) && password === stored;
 }

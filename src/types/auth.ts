@@ -7,6 +7,8 @@ export interface AuthUser {
   role: UserRole | 'admin';
   designation?: string;
   phone?: string;
+  studentId?: string;
+  mustChangePassword?: boolean;
 }
 
 export interface AuthSession {

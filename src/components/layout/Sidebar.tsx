@@ -11,10 +11,8 @@ import {
   ChevronDown,
   ChevronRight,
   BookOpen,
-  UserCheck,
-  FileText,
-  ShieldCheck,
-  Code,
+  ClipboardList,
+  UserRound,
   X
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -112,7 +110,23 @@ export const NAV_SECTIONS: NavSection[] = [
       { id: 'users-roles', label: 'Users & Roles', route: 'settings/users-roles' },
       { id: 'profile', label: 'Profile', route: 'settings/profile' }
     ]
+  },
+  {
+    id: 'performance',
+    label: 'Student Performance',
+    icon: ClipboardList,
+    children: [
+      { id: 'assignments', label: 'Assignments', route: 'performance/assignments' },
+      { id: 'quizzes', label: 'Quizzes', route: 'performance/quizzes' },
+    ]
   }
+];
+
+export const STUDENT_NAV: NavSection[] = [
+  { id: 'student-home', label: 'My Profile', icon: UserRound, route: 'student/home' },
+  { id: 'student-assignments', label: 'Assignments', icon: ClipboardList, route: 'student/assignments' },
+  { id: 'student-quizzes', label: 'Quizzes', icon: BookOpen, route: 'student/quizzes' },
+  { id: 'student-attendance', label: 'Attendance', icon: CalendarCheck, route: 'student/attendance' },
 ];
 
 export const Sidebar: React.FC = () => {
@@ -124,12 +138,23 @@ export const Sidebar: React.FC = () => {
     setMobileMenuOpen,
     academicYear,
     institutionConfig,
+    currentUser,
   } = useApp();
+
+  const navSections = currentUser?.role === 'student'
+    ? STUDENT_NAV
+    : NAV_SECTIONS.filter((section) => {
+        if (section.id !== 'performance') return true;
+        return currentUser?.role === 'admin'
+          || currentUser?.role === 'principal'
+          || currentUser?.role === 'teacher'
+          || currentUser?.role === 'superadmin';
+      });
 
   // Find parent of current route to auto-expand
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = { students: true, fees: true };
-    NAV_SECTIONS.forEach(sec => {
+    const initial: Record<string, boolean> = { students: true, fees: true, performance: true };
+    navSections.forEach(sec => {
       if (sec.children?.some(c => c.route === currentRoute)) {
         initial[sec.id] = true;
       }
@@ -138,7 +163,7 @@ export const Sidebar: React.FC = () => {
   });
 
   useEffect(() => {
-    NAV_SECTIONS.forEach(sec => {
+    navSections.forEach(sec => {
       if (sec.children?.some(c => c.route === currentRoute)) {
         setExpandedSections(prev => ({ ...prev, [sec.id]: true }));
       }
@@ -200,7 +225,7 @@ export const Sidebar: React.FC = () => {
 
       {/* Navigation List */}
       <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-1">
-        {NAV_SECTIONS.map(section => {
+        {navSections.map(section => {
           const Icon = section.icon;
           const isDirect = !!section.route;
           const isActive = isDirect
