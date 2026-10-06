@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ClipboardList, Plus, Trash2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button, EmptyState, Modal, PageHeader, Select } from '../../components/ui';
-import type { AssignmentItem, QuizQuestion } from '../../types';
+import type { AssignmentItem, QuizItem, QuizQuestion, Student } from '../../types';
 
 const CLASS_LEVELS = [
   'Nursery', 'LKG', 'UKG',
@@ -472,6 +472,148 @@ export function QuizzesPage() {
           <Button type="button" variant="secondary" onClick={() => setQuestions((prev) => [...prev, emptyQuestion()])}>Add question</Button>
         </form>
       </Modal>
+    </div>
+  );
+}
+
+function assignmentForStudent(item: AssignmentItem, student: Student) {
+  if (item.audience === 'students') return item.studentIds.includes(student.id);
+  if (item.className !== student.className) return false;
+  return !item.section || item.section === 'All' || item.section === student.section;
+}
+
+function quizForStudent(item: QuizItem, student: Student) {
+  if (item.className !== student.className) return false;
+  return !item.section || item.section === 'All' || item.section === student.section;
+}
+
+export function StudentResultsPage() {
+  const { students, assignments, submissions, quizzes, quizAttempts } = useApp();
+  const [selectedId, setSelectedId] = useState(students[0]?.id || '');
+
+  useEffect(() => {
+    if (!students.some((student) => student.id === selectedId)) {
+      setSelectedId(students[0]?.id || '');
+    }
+  }, [students, selectedId]);
+
+  const rows = useMemo(() => students.map((student) => {
+    const graded = assignments.flatMap((item) => {
+      if (!assignmentForStudent(item, student)) return [];
+      const submission = submissions.find((sub) => sub.assignmentId === item.id && sub.studentId === student.id);
+      if (!submission || submission.marks == null) return [];
+      return [{ id: item.id, title: item.title, marks: submission.marks, max: item.maxMarks, feedback: submission.feedback }];
+    });
+    const quizResults = quizzes.flatMap((quiz) => {
+      if (!quizForStudent(quiz, student)) return [];
+      const attempt = quizAttempts.find((item) => item.quizId === quiz.id && item.studentId === student.id);
+      if (!attempt) return [];
+      return [{ id: quiz.id, title: quiz.title, score: attempt.score, total: quiz.questions.length }];
+    });
+    const percents = [
+      ...graded.filter((item) => item.max > 0).map((item) => (item.marks / item.max) * 100),
+      ...quizResults.filter((item) => item.total > 0).map((item) => (item.score / item.total) * 100),
+    ];
+    const average = percents.length === 0 ? null : Math.round(percents.reduce((sum, value) => sum + value, 0) / percents.length);
+    return { student, graded, quizResults, average };
+  }), [assignments, quizAttempts, quizzes, students, submissions]);
+
+  const active = rows.find((row) => row.student.id === selectedId) ?? rows[0] ?? null;
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Student performance"
+        title="Results"
+        description="See each student’s assignment grades and quiz scores. This is the same performance the student sees after they sign in."
+      />
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={<ClipboardList className="h-7 w-7" />}
+          title="No students yet"
+          description="Admit a student first. Their grades will appear here after you mark an assignment or they submit a quiz."
+        />
+      ) : (
+        <div className="space-y-4">
+          {active ? (
+            <>
+              <div className="cms-panel flex flex-wrap items-end justify-between gap-4 p-5">
+                <div className="w-full max-w-sm">
+                  <Select
+                    label="Student"
+                    value={active.student.id}
+                    onChange={setSelectedId}
+                    options={rows.map((row) => ({
+                      value: row.student.id,
+                      label: row.student.name,
+                      hint: `${row.student.className} · ${row.student.section}${row.average == null ? '' : ` · ${row.average}%`}`,
+                    }))}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-bold text-slate-900">{active.student.name}</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {active.student.className} · Section {active.student.section} · Roll {active.student.rollNo || '—'} · {active.student.admissionNo}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-blue-50 px-4 py-3 text-right">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-blue-500">Average</p>
+                  <p className="text-2xl font-extrabold text-blue-800">{active.average == null ? '—' : `${active.average}%`}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="cms-panel p-5">
+                  <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-slate-400">Assignments</p>
+                  {active.graded.length === 0 ? (
+                    <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">No graded assignment yet.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {active.graded.map((item) => {
+                        const percent = item.max > 0 ? Math.round((item.marks / item.max) * 100) : 0;
+                        return (
+                          <li key={item.id} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3 text-xs">
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="font-bold text-slate-800">{item.title}</p>
+                              <p className="font-extrabold text-emerald-700">{item.marks}/{item.max}</p>
+                            </div>
+                            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
+                              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${percent}%` }} />
+                            </div>
+                            {item.feedback ? <p className="mt-2 text-slate-500">{item.feedback}</p> : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+                <div className="cms-panel p-5">
+                  <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-slate-400">Quizzes</p>
+                  {active.quizResults.length === 0 ? (
+                    <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">No quiz submitted yet.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {active.quizResults.map((item) => {
+                        const percent = item.total > 0 ? Math.round((item.score / item.total) * 100) : 0;
+                        return (
+                          <li key={item.id} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3 text-xs">
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="font-bold text-slate-800">{item.title}</p>
+                              <p className="font-extrabold text-blue-700">{item.score}/{item.total}</p>
+                            </div>
+                            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
+                              <div className="h-full rounded-full bg-blue-500" style={{ width: `${percent}%` }} />
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

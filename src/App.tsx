@@ -42,7 +42,7 @@ import {
   UserManagementPage,
   BackupRestorePage
 } from './pages';
-import { AssignmentsPage, QuizzesPage } from './pages/performance/PerformancePages';
+import { AssignmentsPage, QuizzesPage, StudentResultsPage } from './pages/performance/PerformancePages';
 import {
   StudentHomePage,
   StudentAssignmentsPage,
@@ -223,6 +223,8 @@ const MainLayout: React.FC = () => {
       case 'attendance/attendance-reports':
         return <AttendanceReportsPage />;
 
+      case 'performance/results':
+        return <StudentResultsPage />;
       case 'performance/assignments':
         return <AssignmentsPage />;
       case 'performance/quizzes':

@@ -116,6 +116,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: 'Student Performance',
     icon: ClipboardList,
     children: [
+      { id: 'results', label: 'Results', route: 'performance/results' },
       { id: 'assignments', label: 'Assignments', route: 'performance/assignments' },
       { id: 'quizzes', label: 'Quizzes', route: 'performance/quizzes' },
     ]
@@ -123,7 +124,7 @@ export const NAV_SECTIONS: NavSection[] = [
 ];
 
 export const STUDENT_NAV: NavSection[] = [
-  { id: 'student-home', label: 'My Profile', icon: UserRound, route: 'student/home' },
+  { id: 'student-home', label: 'Dashboard', icon: UserRound, route: 'student/home' },
   { id: 'student-assignments', label: 'Assignments', icon: ClipboardList, route: 'student/assignments' },
   { id: 'student-quizzes', label: 'Quizzes', icon: BookOpen, route: 'student/quizzes' },
   { id: 'student-attendance', label: 'Attendance', icon: CalendarCheck, route: 'student/attendance' },
